@@ -1,0 +1,182 @@
+openapi: 3.1.0
+info:
+  title: HubSpot CRM Integration API
+  version: "1.0.0"
+  description: >
+    API for managing HubSpot CRM contacts, deals, and support tickets.
+    It includes endpoints for creating/updating records, token management, and data retrieval.
+servers:
+  - url: http://localhost:5000
+paths:
+  /crm/register:
+    post:
+      tags:
+        - CRM
+      summary: Create or update CRM records
+      description: Creates or updates a contact, deals, and support tickets in HubSpot.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contact:
+                  type: object
+                  properties:
+                    email:
+                      type: string
+                      example: "test@example.com"
+                    firstname:
+                      type: string
+                      example: "John"
+                    lastname:
+                      type: string
+                      example: "Doe"
+                    phone:
+                      type: string
+                      example: "123-456-7890"
+                  required:
+                    - email
+                    - firstname
+                    - lastname
+                    - phone
+                deals:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      dealname:
+                        type: string
+                        example: "New Deal"
+                      amount:
+                        type: number
+                        example: 1500
+                      dealstage:
+                        type: string
+                        example: "appointmentscheduled"
+                    required:
+                      - dealname
+                      - amount
+                      - dealstage
+                tickets:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      subject:
+                        type: string
+                        example: "Payment Issue"
+                      description:
+                        type: string
+                        example: "Unable to process payment."
+                      category:
+                        type: string
+                        example: "billing"
+                      pipeline:
+                        type: string
+                        example: "support"
+                      hs_ticket_priority:
+                        type: string
+                        example: "HIGH"
+                      hs_pipeline_stage:
+                        type: string
+                        example: "1"
+                    required:
+                      - subject
+                      - description
+                      - category
+                      - pipeline
+                      - hs_ticket_priority
+                      - hs_pipeline_stage
+              required:
+                - contact
+      responses:
+        "200":
+          description: Records processed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  contact_id:
+                    type: string
+                  deal_ids:
+                    type: array
+                    items:
+                      type: string
+                  ticket_ids:
+                    type: array
+                    items:
+                      type: string
+              example:
+                success: true
+                message: "Contact, Deal(s), and Ticket(s) processed successfully."
+                contact_id: "CONTACT_123"
+                deal_ids: ["DEAL_456"]
+                ticket_ids: ["TICKET_789"]
+        "400":
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+              example:
+                success: false
+                error:
+                  code: "VALIDATION_ERROR"
+                  message: "Missing required field: firstname"
+  /crm/objects:
+    get:
+      tags:
+        - CRM
+      summary: Retrieve newly created CRM objects
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+          description: "Page number for pagination."
+        - name: limit
+          in: query
+          schema:
+            type: integer
+          description: "Page size for pagination."
+      responses:
+        "200":
+          description: Successfully retrieved objects.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  contacts:
+                    type: array
+                    items:
+                      type: object
+                  deals:
+                    type: array
+                    items:
+                      type: object
+                  tickets:
+                    type: array
+                    items:
+                      type: object
+              example:
+                contacts: []
+                deals: []
+                tickets: []
