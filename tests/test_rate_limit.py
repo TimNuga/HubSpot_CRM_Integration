@@ -9,7 +9,7 @@ def test_rate_limit_retry_logic(db_session):
     Ensures that our function re-attempts after a 429 response.
     We mock the first call as 429, second as 200, verifying that it eventually succeeds.
     """
-    from app.hubspot_service import create_or_update_contact
+    from app.services.hubspot_service import create_or_update_contact
 
     with requests_mock.Mocker() as m:
         # Mock token refresh

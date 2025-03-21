@@ -2,7 +2,7 @@ import logging
 from flask import Blueprint, request, jsonify
 from marshmallow import ValidationError
 
-from ..hubspot_service import (
+from ..services.hubspot_service import (
     create_or_update_contact,
     create_or_update_deal,
     create_ticket,

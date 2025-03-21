@@ -241,7 +241,7 @@ def create_ticket(ticket_data, contact_id, deal_ids):
             "types": [
                 {
                     "associationCategory": "HUBSPOT_DEFINED",
-                    "associationTypeId": int(15),  # typical contact<->ticket
+                    "associationTypeId": 15,  # typical contact<->ticket
                 }
             ],
             "to": {"id": str(contact_id)},
@@ -255,7 +255,7 @@ def create_ticket(ticket_data, contact_id, deal_ids):
                 "types": [
                     {
                         "associationCategory": "HUBSPOT_DEFINED",
-                        "associationTypeId": int(26),  # typical deal<->ticket
+                        "associationTypeId": 26,  # typical deal<->ticket
                     }
                 ],
                 "to": {"id": str(d_id)},

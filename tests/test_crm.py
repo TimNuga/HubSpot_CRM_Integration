@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from app.hubspot_service import create_or_update_contact, create_ticket
+from app.services.hubspot_service import create_or_update_contact, create_ticket
 from app.models import CreatedCRMObject
 from app import db
 
