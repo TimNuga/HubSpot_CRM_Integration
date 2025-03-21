@@ -27,7 +27,6 @@ requests-mock==1.12.1
 gunicorn==23.0.0
 marshmallow==3.26.1
 tenacity==9.0.0
-Flasgger==0.9.7.1
 PyYAML==6.0.2
 attrs==25.3.0
 jsonschema==4.23.0

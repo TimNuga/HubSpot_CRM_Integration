@@ -8,7 +8,7 @@ info:
 servers:
   - url: http://localhost:5000
 paths:
-  /crm/register:
+  /register:
     post:
       tags:
         - CRM
@@ -140,7 +140,7 @@ paths:
                 error:
                   code: "VALIDATION_ERROR"
                   message: "Missing required field: firstname"
-  /crm/objects:
+  /objects:
     get:
       tags:
         - CRM

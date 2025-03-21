@@ -3,7 +3,6 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from .config import load_config
 from .logging_config import configure_logging
-from flasgger import Swagger
 from flask_swagger_ui import get_swaggerui_blueprint
 from .routes.crm import crm_blueprint
 from .extensions import db
