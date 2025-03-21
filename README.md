@@ -110,7 +110,7 @@ flask run
 # or
 python -m app.main
 ```
-Your app is available at http://localhost:5000.
+Your app is available at http://localhost:5001.
 - Swagger UI: Documentation available at `/docs/openapi.yaml`
 
 ## Docker Setup
@@ -123,7 +123,7 @@ docker compose up --build
 - test: Runs migrations & tests, then exits.
 - web: The Flask app with Gunicorn.
 
-When it starts, the test container will run your tests. If all pass, the web container will proceed to serve on http://localhost:5000.
+When it starts, the test container will run your tests. If all pass, the web container will proceed to serve on http://localhost:5001.
 
 ## API Documentation (Swagger/OpenAPI)
 A dedicated file docs/openapi.yaml provides the full specification. By default, it’s served at:

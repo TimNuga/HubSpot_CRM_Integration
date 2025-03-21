@@ -15,5 +15,5 @@ if [ "$RUN_TESTS" = "1" ]; then
   exit $?
 else
   echo "Starting Gunicorn..."
-  gunicorn "app.main:create_app()" --bind 0.0.0.0:5000 --workers 4
+  gunicorn "app.main:create_app()" --bind 0.0.0.0:5001 --workers 4
 fi

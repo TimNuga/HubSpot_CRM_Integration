@@ -32,7 +32,7 @@ def create_app(env_name=None):
     app.register_blueprint(crm_blueprint, url_prefix="/crm")
 
     SWAGGER_URL = '/api/docs'  
-    API_URL = '/openapi.yaml'  
+    API_URL = '/static/openapi.yaml'  
     swaggerui_blueprint = get_swaggerui_blueprint(
         SWAGGER_URL,
         API_URL,
