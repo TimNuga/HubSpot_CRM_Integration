@@ -158,7 +158,7 @@ An interactive UI is available there, letting you try endpoints.
         "subject": "Billing Issue",
         "description": "Customer cannot pay",
         "category": "billing",
-        "pipeline": "support",
+        "hs_pipeline": "support",
         "hs_ticket_priority": "HIGH",
         "hs_pipeline_stage": "1"
         }
