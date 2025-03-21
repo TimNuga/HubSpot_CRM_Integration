@@ -230,6 +230,7 @@ def create_ticket(ticket_data, contact_id, deal_ids):
             }]
         }
     ]
+
     # Deals -> ticket
     for d_id in deal_ids:
         associations.append({
@@ -242,10 +243,13 @@ def create_ticket(ticket_data, contact_id, deal_ids):
 
     payload = {
         "properties": ticket_data,
-        "associations": associations
+        "associations": associations,
+
     }
+    
     resp = request_with_tenacity("POST", base_url, headers=hubspot_headers(), json=payload)
     if resp.status_code not in [200, 201]:
+        logger.error("Ticket creation failed: %s", resp.status_code, resp.text)
         raise Exception(f"Failed to create ticket: {resp.text}")
     ticket_id = resp.json()["id"]
     logger.info("Created new ticket %s", ticket_id)

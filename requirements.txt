@@ -37,3 +37,5 @@ rpds-py==0.23.1
 six==1.17.0
 flask-swagger-ui==4.11.1
 python-json-logger==3.3.0
+hubspot-api-client==11.1.0
+python-dateutil==2.9.0.post0
