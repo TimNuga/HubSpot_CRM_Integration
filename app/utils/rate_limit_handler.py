@@ -5,11 +5,12 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
     retry_if_exception_type,
-    retry_if_result
+    retry_if_result,
 )
 import requests
 
 logger = logging.getLogger(__name__)
+
 
 def _is_rate_limit_or_server_error(response: requests.Response) -> bool:
     """
@@ -24,6 +25,7 @@ def _is_rate_limit_or_server_error(response: requests.Response) -> bool:
         return True
     return False
 
+
 def _needs_retry(resp: requests.Response) -> bool:
     """
     This function is used by tenacity's `retry_if_result`.
@@ -35,10 +37,11 @@ def _needs_retry(resp: requests.Response) -> bool:
 @retry(
     stop=stop_after_attempt(5),
     wait=wait_exponential(multiplier=1.0, min=1, max=30),
-    retry=retry_if_result(_needs_retry) | retry_if_exception_type(
+    retry=retry_if_result(_needs_retry)
+    | retry_if_exception_type(
         (requests.exceptions.ConnectionError, requests.exceptions.Timeout)
     ),
-    reraise=True
+    reraise=True,
 )
 def request_with_tenacity(method: str, url: str, **kwargs) -> requests.Response:
     """

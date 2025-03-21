@@ -8,6 +8,7 @@ ENV_FILE = os.path.join(BASE_DIR, ".env")
 
 load_dotenv(ENV_FILE)  # Load variables from .env if present
 
+
 class BaseConfig:
     DEBUG = False
     TESTING = False
@@ -19,13 +20,17 @@ class BaseConfig:
     DB_USER = os.environ.get("DB_USER", "postgres")
     DB_PASSWORD = os.environ.get("DB_PASSWORD", "postgres")
     DB_NAME = os.environ.get("DB_NAME", "hubspot_crm_db")
-    SQLALCHEMY_DATABASE_URI = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    SQLALCHEMY_DATABASE_URI = (
+        f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # Hubspot Rate Limit
     HUBSPOT_MAX_RETRIES = int(os.environ.get("HUBSPOT_MAX_RETRIES", 3))
     HUBSPOT_BACKOFF_FACTOR = float(os.environ.get("HUBSPOT_BACKOFF_FACTOR", 2.0))
-    HUBSPOT_BACKOFF_MULTIPLIER = float(os.environ.get("HUBSPOT_BACKOFF_MULTIPLIER", 1.0))
+    HUBSPOT_BACKOFF_MULTIPLIER = float(
+        os.environ.get("HUBSPOT_BACKOFF_MULTIPLIER", 1.0)
+    )
 
     # HubSpot OAuth
     HUBSPOT_CLIENT_ID = os.environ.get("HUBSPOT_CLIENT_ID", "")

@@ -7,6 +7,7 @@ from flask_swagger_ui import get_swaggerui_blueprint
 from .routes.crm import crm_blueprint
 from .extensions import db
 
+
 def create_app(env_name=None):
     """
     Application factory pattern:
@@ -31,14 +32,10 @@ def create_app(env_name=None):
 
     app.register_blueprint(crm_blueprint, url_prefix="/crm")
 
-    SWAGGER_URL = '/api/docs'  
-    API_URL = '/static/openapi.yaml'  
+    SWAGGER_URL = "/api/docs"
+    API_URL = "/static/openapi.yaml"
     swaggerui_blueprint = get_swaggerui_blueprint(
-        SWAGGER_URL,
-        API_URL,
-        config={
-            'app_name': "HubSpot CRM Integration API"
-        }
+        SWAGGER_URL, API_URL, config={"app_name": "HubSpot CRM Integration API"}
     )
     app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
 

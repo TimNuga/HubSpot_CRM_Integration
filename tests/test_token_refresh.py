@@ -4,6 +4,7 @@ import pytest
 import time
 import requests_mock
 
+
 @pytest.mark.usefixtures("test_app")
 def test_proactive_token_refresh(test_app):
     """
@@ -15,17 +16,22 @@ def test_proactive_token_refresh(test_app):
         now = int(time.time())
         test_app.config["HUBSPOT_ACCESS_TOKEN"] = "OLD_TOKEN"
         test_app.config["HUBSPOT_TOKEN_EXPIRES_AT"] = now + 10  # expires in 10s
-        test_app.config["TOKEN_REFRESH_BUFFER"] = 30  # We'll refresh if less than 30s left
+        test_app.config["TOKEN_REFRESH_BUFFER"] = (
+            30  # We'll refresh if less than 30s left
+        )
 
         from app.hubspot_service import get_or_refresh_access_token
 
         with requests_mock.Mocker() as m:
             # We'll mock the refresh endpoint
-            m.post("https://api.hubapi.com/oauth/v1/token", json={
-                "access_token": "NEW_TOKEN",
-                "refresh_token": "NEW_REFRESH",
-                "expires_in": 3600
-            })
+            m.post(
+                "https://api.hubapi.com/oauth/v1/token",
+                json={
+                    "access_token": "NEW_TOKEN",
+                    "refresh_token": "NEW_REFRESH",
+                    "expires_in": 3600,
+                },
+            )
 
             token = get_or_refresh_access_token()
             assert token == "NEW_TOKEN"
@@ -38,6 +44,7 @@ def test_proactive_token_refresh(test_app):
             history = m.request_history
             assert len(history) == 1
             assert history[0].url == "https://api.hubapi.com/oauth/v1/token"
+
 
 @pytest.mark.usefixtures("test_app")
 def test_no_refresh_if_plenty_of_time(test_app):

@@ -6,6 +6,7 @@ from alembic.config import Config as AlembicConfig
 import time
 import os
 
+
 @pytest.fixture(scope="session")
 def test_app():
     """
@@ -17,7 +18,9 @@ def test_app():
     with app.app_context():
         # Pre-populate a valid token to bypass refresh during tests.
         app.config["HUBSPOT_ACCESS_TOKEN"] = "DUMMY_TOKEN"
-        app.config["HUBSPOT_TOKEN_EXPIRES_AT"] = int(time.time()) + 3600  # valid for one hour
+        app.config["HUBSPOT_TOKEN_EXPIRES_AT"] = (
+            int(time.time()) + 3600
+        )  # valid for one hour
         # Run Alembic migrations
         alembic_cfg = AlembicConfig("alembic.ini")
         command.upgrade(alembic_cfg, "head")
@@ -27,6 +30,7 @@ def test_app():
         # Optionally downgrade or drop tables after tests
         command.downgrade(alembic_cfg, "base")
 
+
 @pytest.fixture(scope="function")
 def test_client(test_app):
     """
@@ -34,6 +38,7 @@ def test_client(test_app):
     """
     with test_app.test_client() as client:
         yield client
+
 
 @pytest.fixture(scope="function")
 def db_session(test_app):

@@ -9,6 +9,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+
 def get_or_refresh_access_token():
     """
     Retrieves or refreshes HubSpot access token using refresh token if the in-memory token is None.
@@ -46,25 +47,26 @@ def get_or_refresh_access_token():
     if not access_token or not expires_in:
         logger.error("Token response missing required fields: %s", token_data)
         raise Exception("Invalid token response from HubSpot")
-    
+
     new_expires_at = now + expires_in
 
     config["HUBSPOT_ACCESS_TOKEN"] = access_token
 
     if new_refresh_token:
         config["HUBSPOT_REFRESH_TOKEN"] = new_refresh_token
-    
+
     config["HUBSPOT_TOKEN_EXPIRES_AT"] = new_expires_at
 
-    logger.info("Refreshed token. Expires in %s seconds (at %s)", expires_in, new_expires_at)
+    logger.info(
+        "Refreshed token. Expires in %s seconds (at %s)", expires_in, new_expires_at
+    )
     return access_token
+
 
 def hubspot_headers():
     token = get_or_refresh_access_token()
-    return {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
+    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
 
 def create_or_update_contact(contact_data):
     """
@@ -75,39 +77,36 @@ def create_or_update_contact(contact_data):
     if not email:
         raise ValueError("Contact data must include 'email'.")
 
-    search_url = f"{current_app.config['HUBSPOT_API_BASE_URL']}/crm/v3/objects/contacts/search"
+    search_url = (
+        f"{current_app.config['HUBSPOT_API_BASE_URL']}/crm/v3/objects/contacts/search"
+    )
     payload = {
-        "filterGroups": [{
-            "filters": [{
-                "propertyName": "email",
-                "operator": "EQ",
-                "value": email
-            }]
-        }],
+        "filterGroups": [
+            {"filters": [{"propertyName": "email", "operator": "EQ", "value": email}]}
+        ],
         "properties": ["email"],
-        "limit": 1
+        "limit": 1,
     }
     search_resp = request_with_tenacity(
-        "POST", 
-        search_url, 
-        headers=hubspot_headers(), 
-        json=payload,
-        timeout=30
+        "POST", search_url, headers=hubspot_headers(), json=payload, timeout=30
     )
 
     if search_resp.status_code == 200:
         results = search_resp.json().get("results", [])
-        base_url = f"{current_app.config['HUBSPOT_API_BASE_URL']}/crm/v3/objects/contacts"
+        base_url = (
+            f"{current_app.config['HUBSPOT_API_BASE_URL']}/crm/v3/objects/contacts"
+        )
 
         if results:
             contact_id = results[0]["id"]
             update_url = f"{base_url}/{contact_id}"
             update_payload = {"properties": contact_data}
             update_resp = request_with_tenacity(
-                "PATCH", 
-                update_url, 
-                headers=hubspot_headers(), 
-                json=update_payload
+                "PATCH",
+                update_url,
+                headers=hubspot_headers(),
+                json=update_payload,
+                timeout=30,
             )
             _store_local_crm_object(contact_id, "contact")
             logger.info("Updated contact %s", contact_id)
@@ -120,7 +119,8 @@ def create_or_update_contact(contact_data):
                 "POST",
                 create_url,
                 headers=hubspot_headers(),
-                json=create_payload
+                json=create_payload,
+                timeout=30,
             )
             new_id = create_resp.json()["id"]
             _store_local_crm_object(new_id, "contact")
@@ -129,6 +129,7 @@ def create_or_update_contact(contact_data):
     else:
         logger.error("Search contact failed: %s", search_resp.text)
         search_resp.raise_for_status()
+
 
 def get_contacts_from_hubspot(limit=20, after=None):
     """
@@ -139,9 +140,11 @@ def get_contacts_from_hubspot(limit=20, after=None):
         "limit": limit,
         "after": after,
         "properties": "email,firstname,lastname,phone",
-        "archived": "false"
+        "archived": "false",
     }
-    resp = request_with_tenacity("GET", base_url, headers=hubspot_headers(), params=params)
+    resp = request_with_tenacity(
+        "GET", base_url, headers=hubspot_headers(), params=params, timeout=30
+    )
     data = resp.json()
     results = data.get("results", [])
     paging = data.get("paging", {})
@@ -158,18 +161,22 @@ def create_or_update_deal(deal_data, contact_id):
     if not deal_name:
         raise ValueError("Deal must include 'dealname'.")
 
-    search_url = f"{current_app.config['HUBSPOT_API_BASE_URL']}/crm/v3/objects/deals/search"
+    search_url = (
+        f"{current_app.config['HUBSPOT_API_BASE_URL']}/crm/v3/objects/deals/search"
+    )
     payload = {
-        "filterGroups": [{
-            "filters": [{
-                "propertyName": "dealname",
-                "operator": "EQ",
-                "value": deal_name
-            }]
-        }],
-        "limit": 1
+        "filterGroups": [
+            {
+                "filters": [
+                    {"propertyName": "dealname", "operator": "EQ", "value": deal_name}
+                ]
+            }
+        ],
+        "limit": 1,
     }
-    search_resp = request_with_tenacity("POST", search_url, headers=hubspot_headers(), json=payload)
+    search_resp = request_with_tenacity(
+        "POST", search_url, headers=hubspot_headers(), json=payload, timeout=30
+    )
     if search_resp.status_code != 200:
         raise Exception(f"Failed to search deal: {search_resp.text}")
 
@@ -180,10 +187,12 @@ def create_or_update_deal(deal_data, contact_id):
     associations = [
         {
             "to": {"id": contact_id},
-            "types": [{
-                "associationCategory": "HUBSPOT_DEFINED",
-                "associationTypeId": 3  # typical contact<->deal
-            }]
+            "types": [
+                {
+                    "associationCategory": "HUBSPOT_DEFINED",
+                    "associationTypeId": 3,  # typical contact<->deal
+                }
+            ],
         }
     ]
 
@@ -191,11 +200,14 @@ def create_or_update_deal(deal_data, contact_id):
         # Update existing
         deal_id = results[0]["id"]
         update_url = f"{base_url}/{deal_id}"
-        update_payload = {
-            "properties": deal_data,
-            "associations": associations
-        }
-        update_resp = request_with_tenacity("PATCH", update_url, headers=hubspot_headers(), json=update_payload)
+        update_payload = {"properties": deal_data, "associations": associations}
+        update_resp = request_with_tenacity(
+            "PATCH",
+            update_url,
+            headers=hubspot_headers(),
+            json=update_payload,
+            timeout=30,
+        )
         if update_resp.status_code not in [200, 201]:
             raise Exception(f"Failed to update deal: {update_resp.text}")
         logger.info("Updated deal %s", deal_id)
@@ -203,11 +215,11 @@ def create_or_update_deal(deal_data, contact_id):
         return deal_id
     else:
         # Create new
-        create_payload = {
-            "properties": deal_data,
-            "associations": associations
-        }
-        create_resp = requests.post(base_url, json=create_payload, headers=hubspot_headers(), timeout=30)
+        create_payload = {"properties": deal_data, "associations": associations}
+
+        create_resp = request_with_tenacity(
+            "POST", base_url, headers=hubspot_headers(), json=create_payload, timeout=30
+        )
         if create_resp.status_code not in [200, 201]:
             raise Exception(f"Failed to create deal: {create_resp.text}")
         deal_id = create_resp.json()["id"]
@@ -215,39 +227,48 @@ def create_or_update_deal(deal_data, contact_id):
         _store_local_crm_object(deal_id, "deal")
         return deal_id
 
+
 def create_ticket(ticket_data, contact_id, deal_ids):
     """
     Creates a ticket in HubSpot. Always creates a new ticket.
     Associates it with the contact and deals.
     """
     base_url = f"{current_app.config['HUBSPOT_API_BASE_URL']}/crm/v3/objects/tickets"
+
     associations = [
         {
             "to": {"id": contact_id},
-            "types": [{
-                "associationCategory": "HUBSPOT_DEFINED",
-                "associationTypeId": 15  # typical contact<->ticket
-            }]
+            "types": [
+                {
+                    "associationCategory": "HUBSPOT_DEFINED",
+                    "associationTypeId": 15,  # typical contact<->ticket
+                }
+            ],
         }
     ]
 
     # Deals -> ticket
     for d_id in deal_ids:
-        associations.append({
-            "to": {"id": d_id},
-            "types": [{
-                "associationCategory": "HUBSPOT_DEFINED",
-                "associationTypeId": 26  # typical deal<->ticket
-            }]
-        })
+        associations.append(
+            {
+                "to": {"id": d_id},
+                "types": [
+                    {
+                        "associationCategory": "HUBSPOT_DEFINED",
+                        "associationTypeId": 26,  # typical deal<->ticket
+                    }
+                ],
+            }
+        )
 
     payload = {
         "properties": ticket_data,
         "associations": associations,
-
     }
-    
-    resp = request_with_tenacity("POST", base_url, headers=hubspot_headers(), json=payload)
+
+    resp = request_with_tenacity(
+        "POST", base_url, headers=hubspot_headers(), json=payload, timeout=30
+    )
     if resp.status_code not in [200, 201]:
         logger.error("Ticket creation failed: %s", resp.status_code, resp.text)
         raise Exception(f"Failed to create ticket: {resp.text}")
@@ -256,6 +277,7 @@ def create_ticket(ticket_data, contact_id, deal_ids):
     _store_local_crm_object(ticket_id, "ticket")
     return ticket_id
 
+
 def _store_local_crm_object(obj_id, obj_type):
     """
     Persists a reference of the created/updated CRM object in PostgreSQL.
@@ -263,6 +285,7 @@ def _store_local_crm_object(obj_id, obj_type):
     crm_obj = CreatedCRMObject(object_id=obj_id, object_type=obj_type)
     db.session.add(crm_obj)
     db.session.commit()
+
 
 def retrieve_new_objects(limit=10, after=None):
     """
@@ -279,11 +302,16 @@ def retrieve_new_objects(limit=10, after=None):
 
             # Using a compound query
             base_query = base_query.filter(
-                (CreatedCRMObject.created_at < last_created_at) |
-                ((CreatedCRMObject.created_at == last_created_at) & (CreatedCRMObject.id < last_id))
+                (CreatedCRMObject.created_at < last_created_at)
+                | (
+                    (CreatedCRMObject.created_at == last_created_at)
+                    & (CreatedCRMObject.id < last_id)
+                )
             )
         except Exception as e:
-            raise Exception("Invalid cursor format. Expected 'created_at_iso:id'") from e
+            raise Exception(
+                "Invalid cursor format. Expected 'created_at_iso:id'"
+            ) from e
 
     # Fetch one extra record to determine if there's a next page.
     rows = base_query.limit(limit + 1).all()
@@ -296,11 +324,14 @@ def retrieve_new_objects(limit=10, after=None):
     else:
         next_after = None
 
-    results = [{
-        "id": r.id,
-        "object_id": r.object_id,
-        "object_type": r.object_type,
-        "created_at": r.created_at.isoformat(),
-    } for r in rows]
+    results = [
+        {
+            "id": r.id,
+            "object_id": r.object_id,
+            "object_type": r.object_type,
+            "created_at": r.created_at.isoformat(),
+        }
+        for r in rows
+    ]
 
     return results, next_after

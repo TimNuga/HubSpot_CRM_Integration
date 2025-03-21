@@ -73,7 +73,7 @@ paths:
                       category:
                         type: string
                         example: "billing"
-                      pipeline:
+                      hs_pipeline:
                         type: string
                         example: "support"
                       hs_ticket_priority:
@@ -86,7 +86,7 @@ paths:
                       - subject
                       - description
                       - category
-                      - pipeline
+                      - hs_pipeline
                       - hs_ticket_priority
                       - hs_pipeline_stage
               required:
