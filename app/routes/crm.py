@@ -128,20 +128,6 @@ def register():
             }
         }), 500
 
-
-# @crm_blueprint.route("/objects", methods=["GET"])
-# def get_new_objects():
-#     """
-#     Returns newly created/updated objects from local DB.
-#     You could also add pagination here if desired (e.g., /objects?page=1&limit=10).
-#     """
-#     try:
-#         data = retrieve_new_objects()
-#         return jsonify({"new_objects": data}), 200
-#     except Exception as e:
-#         logger.error("Error retrieving new objects: %s", str(e))
-#         return jsonify({"error": str(e)}), 500
-
 @crm_blueprint.route("/objects", methods=["GET"])
 def get_new_objects():
     """

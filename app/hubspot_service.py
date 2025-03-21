@@ -5,7 +5,6 @@ from flask import current_app
 from app.extensions import db
 from app.models import CreatedCRMObject
 from app.utils.rate_limit_handler import request_with_tenacity
-# from dateutil.parser import isoparse
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -270,11 +269,11 @@ def retrieve_new_objects(limit=10, after=None):
 
     if after is not None:
         try:
-            # Use rsplit with maxsplit=1 to split on the last colon only.
             last_created_at_str, last_id_str = after.rsplit(":", 1)
             last_created_at = datetime.fromisoformat(last_created_at_str)
             last_id = int(last_id_str)
-            # Use a compound filter: 
+
+            # Using a compound query
             base_query = base_query.filter(
                 (CreatedCRMObject.created_at < last_created_at) |
                 ((CreatedCRMObject.created_at == last_created_at) & (CreatedCRMObject.id < last_id))
@@ -301,21 +300,3 @@ def retrieve_new_objects(limit=10, after=None):
     } for r in rows]
 
     return results, next_after
-
-
-
-# def retrieve_new_objects():
-#     """
-#     Example: Return objects from local DB. You can also directly query HubSpot with 'createdate'.
-#     For demonstration, we rely on local DB that tracks newly created or updated items.
-#     """
-#     rows = CreatedCRMObject.query.order_by(CreatedCRMObject.created_at.desc()).all()
-#     results = []
-#     for r in rows:
-#         results.append({
-#             "id": r.id,
-#             "object_id": r.object_id,
-#             "object_type": r.object_type,
-#             "created_at": r.created_at.isoformat(),
-#         })
-#     return results

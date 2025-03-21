@@ -6,7 +6,7 @@ def configure_logging(log_level="INFO"):
     """
     Configures Python's logging library to emit JSON-formatted logs.
     """
-    # Create a stream handler that writes to stdout
+    # Creating a stream handler that writes to stdout
     log_handler = logging.StreamHandler(sys.stdout)
 
     # Defining a JSON formatter with python-json-logger
@@ -20,7 +20,7 @@ def configure_logging(log_level="INFO"):
         level=log_level,
         handlers=[log_handler]
     )
-    
+
     logging.getLogger("flask.app").setLevel(log_level)
     logging.getLogger("werkzeug").setLevel(log_level)
 
