@@ -6,6 +6,7 @@ from app.extensions import db
 from app.models import CreatedCRMObject
 from app.utils.rate_limit_handler import request_with_tenacity
 from datetime import datetime
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -237,13 +238,13 @@ def create_ticket(ticket_data, contact_id, deal_ids):
 
     associations = [
         {
-            "to": {"id": contact_id},
             "types": [
                 {
                     "associationCategory": "HUBSPOT_DEFINED",
-                    "associationTypeId": 15,  # typical contact<->ticket
+                    "associationTypeId": int(15),  # typical contact<->ticket
                 }
             ],
+            "to": {"id": str(contact_id)},
         }
     ]
 
@@ -251,20 +252,22 @@ def create_ticket(ticket_data, contact_id, deal_ids):
     for d_id in deal_ids:
         associations.append(
             {
-                "to": {"id": d_id},
                 "types": [
                     {
                         "associationCategory": "HUBSPOT_DEFINED",
-                        "associationTypeId": 26,  # typical deal<->ticket
+                        "associationTypeId": int(26),  # typical deal<->ticket
                     }
                 ],
+                "to": {"id": str(d_id)},
             }
         )
 
-    payload = {
-        "properties": ticket_data,
-        "associations": associations,
-    }
+    payload = {"properties": ticket_data, "associations": associations}
+
+    if "objectWriteTraceId" in payload:
+        del payload["objectWriteTraceId"]
+
+    logger.debug("Ticket creation payload: %s", json.dumps(payload))
 
     resp = request_with_tenacity(
         "POST", base_url, headers=hubspot_headers(), json=payload, timeout=30

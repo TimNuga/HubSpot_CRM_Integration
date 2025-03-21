@@ -128,7 +128,7 @@ When it starts, the test container will run your tests. If all pass, the web con
 ## API Documentation (Swagger/OpenAPI)
 A dedicated file docs/openapi.yaml provides the full specification. By default, it’s served at:
 ```bash
-GET /docs/openapi.yml
+GET /api/docs/
 ```
 
 An interactive UI is available there, letting you try endpoints.
