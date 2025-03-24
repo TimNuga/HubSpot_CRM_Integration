@@ -1,182 +1,343 @@
-openapi: 3.0.0
+openapi: 3.0.3
 info:
   title: HubSpot CRM Integration API
-  version: "1.0.0"
   description: >
-    API for managing HubSpot CRM contacts, deals, and support tickets.
-    It includes endpoints for creating/updating records, token management, and data retrieval.
+    This API integrates with HubSpot to create or update contacts, deals, and tickets.
+    It also retrieves newly created CRM objects from a local database.
+  version: "1.0.0"
+
 servers:
-  - url: http://localhost:5001
+  - url: /api
+    description: "Base path for CRM routes."
+
 paths:
-  /crm/register:
+  /contacts:
     post:
-      tags:
-        - CRM
-      summary: Create or update CRM records
-      description: Creates or updates a contact, deals, and support tickets in HubSpot.
+      summary: Create a new HubSpot contact
+      description: >
+        Creates a new contact in HubSpot if it doesn't exist, and stores a local record.
+      operationId: createContact
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                contact:
-                  type: object
-                  properties:
-                    email:
-                      type: string
-                      example: "test@example.com"
-                    firstname:
-                      type: string
-                      example: "John"
-                    lastname:
-                      type: string
-                      example: "Doe"
-                    phone:
-                      type: string
-                      example: "123-456-7890"
-                  required:
-                    - email
-                    - firstname
-                    - lastname
-                    - phone
-                deals:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      dealname:
-                        type: string
-                        example: "New Deal"
-                      amount:
-                        type: number
-                        example: 1500
-                      dealstage:
-                        type: string
-                        example: "appointmentscheduled"
-                    required:
-                      - dealname
-                      - amount
-                      - dealstage
-                tickets:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      subject:
-                        type: string
-                        example: "Payment Issue"
-                      description:
-                        type: string
-                        example: "Unable to process payment."
-                      category:
-                        type: string
-                        example: "billing"
-                      hs_pipeline:
-                        type: string
-                        example: "support"
-                      hs_ticket_priority:
-                        type: string
-                        example: "HIGH"
-                      hs_pipeline_stage:
-                        type: string
-                        example: "1"
-                    required:
-                      - subject
-                      - description
-                      - category
-                      - hs_pipeline
-                      - hs_ticket_priority
-                      - hs_pipeline_stage
-              required:
-                - contact
+              $ref: '#/components/schemas/Contact'
       responses:
-        "200":
-          description: Records processed successfully.
+        '200':
+          description: "Successfully created or upserted contact."
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  message:
-                    type: string
-                  contact_id:
-                    type: string
-                  deal_ids:
-                    type: array
-                    items:
-                      type: string
-                  ticket_ids:
-                    type: array
-                    items:
-                      type: string
-              example:
-                success: true
-                message: "Contact, Deal(s), and Ticket(s) processed successfully."
-                contact_id: "CONTACT_123"
-                deal_ids: ["DEAL_456"]
-                ticket_ids: ["TICKET_789"]
-        "400":
-          description: Validation error.
+                $ref: '#/components/schemas/UpsertContactResponse'
+        '400':
+          description: "Validation error (missing or invalid fields)."
+        '500':
+          description: "Server error, or unexpected exception."
+
+    put:
+      summary: Update an existing contact (upsert logic)
+      description: >
+        If the contact already exists (based on email), it updates it. Otherwise, it creates a new one.
+      operationId: updateContact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Contact'
+      responses:
+        '200':
+          description: "Successfully upserted contact."
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  error:
-                    type: object
-                    properties:
-                      code:
-                        type: string
-                      message:
-                        type: string
-              example:
-                success: false
-                error:
-                  code: "VALIDATION_ERROR"
-                  message: "Missing required field: firstname"
-  /crm/objects:
+                $ref: '#/components/schemas/UpsertContactResponse'
+        '400':
+          description: "Validation error (missing or invalid fields)."
+        '500':
+          description: "Server error, or unexpected exception."
+
+  /deals:
+    post:
+      summary: Create a new HubSpot deal
+      description: >
+        Creates a new deal in HubSpot if it doesn't exist, and optionally associates it with a contact.
+      operationId: createDeal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Deal'
+      responses:
+        '200':
+          description: "Successfully created or upserted deal."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpsertDealResponse'
+        '400':
+          description: "Validation error (missing or invalid fields)."
+        '500':
+          description: "Server error, or unexpected exception."
+
+    put:
+      summary: Update or upsert a HubSpot deal
+      description: >
+        If the deal exists (based on dealname), updates it; else creates a new one.
+      operationId: updateDeal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Deal'
+      responses:
+        '200':
+          description: "Successfully upserted deal."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpsertDealResponse'
+        '400':
+          description: "Validation error (missing or invalid fields)."
+        '500':
+          description: "Server error, or unexpected exception."
+
+  /tickets:
+    post:
+      summary: Create a new HubSpot ticket
+      description: >
+        Always creates a new ticket in HubSpot, never updates existing tickets.  
+        Optionally associates the ticket with a contact and deal if provided.
+      operationId: createTicket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Ticket'
+      responses:
+        '201':
+          description: "Successfully created a new ticket."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateTicketResponse'
+        '400':
+          description: "Validation error (missing or invalid fields)."
+        '500':
+          description: "Server error, or unexpected exception."
+
+  /new-crm-objects:
     get:
-      tags:
-        - CRM
-      summary: Retrieve newly created CRM objects
+      summary: Retrieve newly created CRM objects from local DB
+      description: >
+        Returns locally stored new contacts, deals, or tickets.  
+        Query params:
+          - **objectType** = "contacts" | "deals" | "tickets"  
+          - **page** = 1-based page number  
+          - **limit** = number of results per page  
+      operationId: getNewCrmObjects
       parameters:
-        - name: page
-          in: query
+        - in: query
+          name: objectType
+          schema:
+            type: string
+            enum: [contacts, deals, tickets]
+          description: "Filter the type of CRM object to retrieve."
+        - in: query
+          name: page
           schema:
             type: integer
-          description: "Page number for pagination."
-        - name: limit
-          in: query
+            default: 1
+          description: "Which page of results to return."
+        - in: query
+          name: limit
           schema:
             type: integer
-          description: "Page size for pagination."
+            default: 10
+          description: "Number of objects per page."
       responses:
-        "200":
-          description: Successfully retrieved objects.
+        '200':
+          description: "Successfully retrieved new CRM objects."
           content:
             application/json:
               schema:
+                $ref: '#/components/schemas/GetNewCrmObjectsResponse'
+        '500':
+          description: "Server error, or unexpected exception."
+
+components:
+  schemas:
+    Contact:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        firstname:
+          type: string
+          example: John
+        lastname:
+          type: string
+          example: Doe
+        phone:
+          type: string
+          example: +1-202-555-0147
+      required: ["email", "firstname", "lastname", "phone"]
+
+    Deal:
+      type: object
+      properties:
+        dealname:
+          type: string
+          example: "New Big Deal"
+        amount:
+          type: number
+          format: float
+          example: 999.99
+        dealstage:
+          type: string
+          example: appointmentscheduled
+        contact_id:
+          type: string
+          example: CONTACT_123
+      required: ["dealname", "amount", "dealstage"]
+
+    Ticket:
+      type: object
+      properties:
+        subject:
+          type: string
+          example: "Website is down"
+        description:
+          type: string
+          example: "We cannot access the main site."
+        category:
+          type: string
+          example: technical_issue
+        pipeline:
+          type: string
+          example: support_pipeline
+        hs_ticket_priority:
+          type: string
+          example: HIGH
+        hs_pipeline_stage:
+          type: string
+          example: "1"
+        contact_id:
+          type: string
+          example: CONTACT_123
+        deal_id:
+          type: string
+          example: DEAL_999
+      required:
+        - subject
+        - description
+        - category
+        - pipeline
+        - hs_ticket_priority
+        - hs_pipeline_stage
+
+    UpsertContactResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Request successful"
+        data:
+          type: object
+          properties:
+            contact:
+              type: object
+              description: "Resulting contact object from HubSpot"
+      required: ["success", "data"]
+
+    UpsertDealResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Deal upserted"
+        data:
+          type: object
+          properties:
+            deal:
+              type: object
+              description: "Resulting deal object from HubSpot"
+      required: ["success", "data"]
+
+    CreateTicketResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Request successful"
+        data:
+          type: object
+          properties:
+            ticket:
+              type: object
+              description: "Resulting ticket object from HubSpot"
+        status_code:
+          type: integer
+          example: 201
+
+    GetNewCrmObjectsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Request successful"
+        data:
+          type: object
+          properties:
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 10
+            total:
+              type: integer
+              example: 47
+            results:
+              type: array
+              items:
                 type: object
                 properties:
-                  contacts:
-                    type: array
-                    items:
-                      type: object
-                  deals:
-                    type: array
-                    items:
-                      type: object
-                  tickets:
-                    type: array
-                    items:
-                      type: object
-              example:
-                contacts: []
-                deals: []
-                tickets: []
+                  id:
+                    type: integer
+                    example: 101
+                  external_id:
+                    type: string
+                    example: "CONTACT_123"
+                  object_type:
+                    type: string
+                    enum: [contacts, deals, tickets]
+                  name:
+                    type: string
+                    example: "john@example.com"
+                  created_date:
+                    type: string
+                    format: date-time
+                  updated_date:
+                    type: string
+                    format: date-time
+      required: ["success", "data"]
+

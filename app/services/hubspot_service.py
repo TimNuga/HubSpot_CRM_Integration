@@ -1,340 +1,176 @@
-import time
-import requests
-import logging
 from flask import current_app
-from app.extensions import db
-from app.models import CreatedCRMObject
-from app.utils.rate_limit_handler import request_with_tenacity
-from datetime import datetime
-import json
+from requests.exceptions import RequestException
+import datetime
 
-logger = logging.getLogger(__name__)
+from app.models import CreatedCRMObject, db
+from app.utils.errors import BaseError
+from .oauth_service import HubspotOAuthService
+from ..integrations.hubspot_api import HubSpotAPI
 
 
-def get_or_refresh_access_token():
+class HubSpotService:
     """
-    Retrieves or refreshes HubSpot access token using refresh token if the in-memory token is None.
-    You'd store expiry in production to refresh proactively.
+    Encapsulates business logic for upserting contacts/deals,
+    creating tickets, and retrieving new objects from local DB.
     """
-    config = current_app.config
-    now = int(time.time())
-    expires_at = config.get("HUBSPOT_TOKEN_EXPIRES_AT", 0)
-    buffer_sec = config.get("TOKEN_REFRESH_BUFFER", 60)
 
-    # If we have a token and it's not near expiry, just return it
-    if config["HUBSPOT_ACCESS_TOKEN"] and (now < expires_at - buffer_sec):
-        return config["HUBSPOT_ACCESS_TOKEN"]
+    def __init__(self):
+        self.oauth_service = HubspotOAuthService()
 
-    logger.info("Token is expired or close to expiry. Refreshing...")
+    def _api_client(self) -> HubSpotAPI:
+        token = self.oauth_service.get_access_token()
+        return HubSpotAPI(token)
 
-    # Refresh the token
-    payload = {
-        "grant_type": "refresh_token",
-        "client_id": config["HUBSPOT_CLIENT_ID"],
-        "client_secret": config["HUBSPOT_CLIENT_SECRET"],
-        "refresh_token": config["HUBSPOT_REFRESH_TOKEN"],
-    }
-
-    resp = requests.post(config["HUBSPOT_OAUTH_TOKEN_URL"], data=payload, timeout=30)
-    if resp.status_code != 200:
-        logger.error("Failed to refresh HubSpot token: %s", resp.text)
-        raise Exception("Unable to obtain HubSpot access token")
-
-    token_data = resp.json()
-    access_token = token_data.get("access_token")
-    new_refresh_token = token_data.get("refresh_token")
-    expires_in = token_data.get("expires_in", 0)
-
-    if not access_token or not expires_in:
-        logger.error("Token response missing required fields: %s", token_data)
-        raise Exception("Invalid token response from HubSpot")
-
-    new_expires_at = now + expires_in
-
-    config["HUBSPOT_ACCESS_TOKEN"] = access_token
-
-    if new_refresh_token:
-        config["HUBSPOT_REFRESH_TOKEN"] = new_refresh_token
-
-    config["HUBSPOT_TOKEN_EXPIRES_AT"] = new_expires_at
-
-    logger.info(
-        "Refreshed token. Expires in %s seconds (at %s)", expires_in, new_expires_at
-    )
-    return access_token
-
-
-def hubspot_headers():
-    token = get_or_refresh_access_token()
-    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-
-
-def create_or_update_contact(contact_data):
-    """
-    Creates or updates a HubSpot contact. Returns the HubSpot contact ID.
-    Also logs the creation/update in local DB.
-    """
-    email = contact_data.get("email")
-    if not email:
-        raise ValueError("Contact data must include 'email'.")
-
-    search_url = (
-        f"{current_app.config['HUBSPOT_API_BASE_URL']}/crm/v3/objects/contacts/search"
-    )
-    payload = {
-        "filterGroups": [
-            {"filters": [{"propertyName": "email", "operator": "EQ", "value": email}]}
-        ],
-        "properties": ["email"],
-        "limit": 1,
-    }
-    search_resp = request_with_tenacity(
-        "POST", search_url, headers=hubspot_headers(), json=payload, timeout=30
-    )
-
-    if search_resp.status_code == 200:
-        results = search_resp.json().get("results", [])
-        base_url = (
-            f"{current_app.config['HUBSPOT_API_BASE_URL']}/crm/v3/objects/contacts"
-        )
-
-        if results:
-            contact_id = results[0]["id"]
-            update_url = f"{base_url}/{contact_id}"
-            update_payload = {"properties": contact_data}
-            update_resp = request_with_tenacity(
-                "PATCH",
-                update_url,
-                headers=hubspot_headers(),
-                json=update_payload,
-                timeout=30,
+    def upsert_contact(self, contact_data: dict) -> dict:
+        """
+        If the contact doesn't exist, create it; else update the existing record.
+        Then store or update local CreatedCRMObject to track it as 'contacts'.
+        """
+        api = self._api_client()
+        existing = api.find_contact_by_email(contact_data["email"])
+        if existing:
+            contact_id = existing["id"]
+            updated = api.update_contact(contact_id, contact_data)
+            self._store_created_crm_object(
+                external_id=contact_id,
+                object_type="contacts",
+                name=updated["properties"].get("email", ""),
             )
-            _store_local_crm_object(contact_id, "contact")
-            logger.info("Updated contact %s", contact_id)
-            return contact_id
+            return updated
         else:
-            # Create new contact
-            create_url = base_url
-            create_payload = {"properties": contact_data}
-            create_resp = request_with_tenacity(
-                "POST",
-                create_url,
-                headers=hubspot_headers(),
-                json=create_payload,
-                timeout=30,
+            created = api.create_contact(contact_data)
+            contact_id = created["id"]
+            self._store_created_crm_object(
+                external_id=contact_id,
+                object_type="contacts",
+                name=created["properties"].get("email", ""),
             )
-            new_id = create_resp.json()["id"]
-            _store_local_crm_object(new_id, "contact")
-            logger.info("Created new contact %s", new_id)
-            return new_id
-    else:
-        logger.error("Search contact failed: %s", search_resp.text)
-        search_resp.raise_for_status()
+            return created
 
+    def upsert_deal(self, deal_data: dict) -> dict:
+        """
+        If the deal doesn't exist, create it; else update the existing record.
+        Also, associate with contact if contact_id is present.
+        Then store or update local CreatedCRMObject as 'deals'.
+        """
+        api = self._api_client()
+        existing = api.find_deal_by_name(deal_data["dealname"])
+        if existing:
+            deal_id = existing["id"]
+            updated = api.update_deal(deal_id, deal_data)
+            if "contact_id" in deal_data:
+                api.associate_contact_and_deal(deal_data["contact_id"], deal_id)
+            self._store_created_crm_object(
+                external_id=deal_id,
+                object_type="deals",
+                name=updated["properties"].get("dealname", ""),
+            )
+            return updated
+        else:
+            created = api.create_deal(deal_data)
+            deal_id = created["id"]
+            if "contact_id" in deal_data:
+                api.associate_contact_and_deal(deal_data["contact_id"], deal_id)
+            self._store_created_crm_object(
+                external_id=deal_id,
+                object_type="deals",
+                name=created["properties"].get("dealname", ""),
+            )
+            return created
 
-def get_contacts_from_hubspot(limit=20, after=None):
-    """
-    Fetches a page of contacts from HubSpot using cursor-based pagination.
-    """
-    base_url = f"{current_app.config['HUBSPOT_API_BASE_URL']}/crm/v3/objects/contacts"
-    params = {
-        "limit": limit,
-        "after": after,
-        "properties": "email,firstname,lastname,phone",
-        "archived": "false",
-    }
-    resp = request_with_tenacity(
-        "GET", base_url, headers=hubspot_headers(), params=params, timeout=30
-    )
-    data = resp.json()
-    results = data.get("results", [])
-    paging = data.get("paging", {})
-    next_after = paging.get("next", {}).get("after")
-    return results, next_after
+    def create_ticket(self, ticket_data: dict) -> dict:
+        """
+        Always creates a new ticket, never updates existing ones.
+        If contact_id and/or deal_id exist, associate them.
+        Then store local CreatedCRMObject as 'tickets'.
+        """
+        api = self._api_client()
+        created = api.create_ticket(ticket_data)
+        ticket_id = created["id"]
 
-
-def create_or_update_deal(deal_data, contact_id):
-    """
-    Creates or updates a deal in HubSpot. Returns the deal ID.
-    Associates the deal with the provided contact.
-    """
-    deal_name = deal_data.get("dealname")
-    if not deal_name:
-        raise ValueError("Deal must include 'dealname'.")
-
-    search_url = (
-        f"{current_app.config['HUBSPOT_API_BASE_URL']}/crm/v3/objects/deals/search"
-    )
-    payload = {
-        "filterGroups": [
-            {
-                "filters": [
-                    {"propertyName": "dealname", "operator": "EQ", "value": deal_name}
-                ]
-            }
-        ],
-        "limit": 1,
-    }
-    search_resp = request_with_tenacity(
-        "POST", search_url, headers=hubspot_headers(), json=payload, timeout=30
-    )
-    if search_resp.status_code != 200:
-        raise Exception(f"Failed to search deal: {search_resp.text}")
-
-    results = search_resp.json().get("results", [])
-    base_url = f"{current_app.config['HUBSPOT_API_BASE_URL']}/crm/v3/objects/deals"
-
-    # Associate structure
-    associations = [
-        {
-            "to": {"id": contact_id},
-            "types": [
-                {
-                    "associationCategory": "HUBSPOT_DEFINED",
-                    "associationTypeId": 3,  # typical contact<->deal
-                }
-            ],
-        }
-    ]
-
-    if results:
-        # Update existing
-        deal_id = results[0]["id"]
-        update_url = f"{base_url}/{deal_id}"
-        update_payload = {"properties": deal_data, "associations": associations}
-        update_resp = request_with_tenacity(
-            "PATCH",
-            update_url,
-            headers=hubspot_headers(),
-            json=update_payload,
-            timeout=30,
-        )
-        if update_resp.status_code not in [200, 201]:
-            raise Exception(f"Failed to update deal: {update_resp.text}")
-        logger.info("Updated deal %s", deal_id)
-        _store_local_crm_object(deal_id, "deal")
-        return deal_id
-    else:
-        # Create new
-        create_payload = {"properties": deal_data, "associations": associations}
-
-        create_resp = request_with_tenacity(
-            "POST", base_url, headers=hubspot_headers(), json=create_payload, timeout=30
-        )
-        if create_resp.status_code not in [200, 201]:
-            raise Exception(f"Failed to create deal: {create_resp.text}")
-        deal_id = create_resp.json()["id"]
-        logger.info("Created new deal %s", deal_id)
-        _store_local_crm_object(deal_id, "deal")
-        return deal_id
-
-
-def create_ticket(ticket_data, contact_id, deal_ids):
-    """
-    Creates a ticket in HubSpot. Always creates a new ticket.
-    Associates it with the contact and deals.
-    """
-    base_url = f"{current_app.config['HUBSPOT_API_BASE_URL']}/crm/v3/objects/tickets"
-
-    associations = [
-        {
-            "types": [
-                {
-                    "associationCategory": "HUBSPOT_DEFINED",
-                    "associationTypeId": 15,  # typical contact<->ticket
-                }
-            ],
-            "to": {"id": str(contact_id)},
-        }
-    ]
-
-    # Deals -> ticket
-    for d_id in deal_ids:
-        associations.append(
-            {
-                "types": [
-                    {
-                        "associationCategory": "HUBSPOT_DEFINED",
-                        "associationTypeId": 26,  # typical deal<->ticket
-                    }
-                ],
-                "to": {"id": str(d_id)},
-            }
-        )
-
-    payload = {"properties": ticket_data, "associations": associations}
-
-    if "objectWriteTraceId" in payload:
-        del payload["objectWriteTraceId"]
-
-    logger.debug("Ticket creation payload: %s", json.dumps(payload))
-
-    resp = request_with_tenacity(
-        "POST", base_url, headers=hubspot_headers(), json=payload, timeout=30
-    )
-    if resp.status_code not in [200, 201]:
-        logger.error("Ticket creation failed: %s", resp.status_code, resp.text)
-        raise Exception(f"Failed to create ticket: {resp.text}")
-    ticket_id = resp.json()["id"]
-    logger.info("Created new ticket %s", ticket_id)
-    _store_local_crm_object(ticket_id, "ticket")
-    return ticket_id
-
-
-def _store_local_crm_object(obj_id, obj_type):
-    """
-    Persists a reference of the created/updated CRM object in PostgreSQL.
-    """
-    crm_obj = CreatedCRMObject(object_id=obj_id, object_type=obj_type)
-    db.session.add(crm_obj)
-    db.session.commit()
-
-
-def retrieve_new_objects(limit=10, after=None):
-    """
-    Retrieves newly created CRM objects in descending order using compound cursor-based pagination.
-    The cursor format is "<created_at_iso>:<id>".
-    """
-    base_query = CreatedCRMObject.query.order_by(CreatedCRMObject.id.desc())
-
-    if after is not None:
-        try:
-            last_created_at_str, last_id_str = after.rsplit(":", 1)
-            last_created_at = datetime.fromisoformat(last_created_at_str)
-            last_id = int(last_id_str)
-
-            # Using a compound query
-            base_query = base_query.filter(
-                (CreatedCRMObject.created_at < last_created_at)
-                | (
-                    (CreatedCRMObject.created_at == last_created_at)
-                    & (CreatedCRMObject.id < last_id)
+        if "contact_id" in ticket_data:
+            try:
+                api.associate_ticket_with_contact(ticket_id, ticket_data["contact_id"])
+            except RequestException as e:
+                current_app.logger.warning(
+                    "Failed to associate ticket with contact: %s", str(e)
                 )
+
+        if "deal_id" in ticket_data:
+            try:
+                api.associate_ticket_with_deal(ticket_id, ticket_data["deal_id"])
+            except RequestException as e:
+                current_app.logger.warning(
+                    "Failed to associate ticket with deal: %s", str(e)
+                )
+
+        self._store_created_crm_object(
+            external_id=ticket_id,
+            object_type="tickets",
+            name=created["properties"].get("subject", ""),
+        )
+        return created
+
+    def get_new_objects_from_db(self, object_type: str, page: int = 1, limit: int = 10):
+        """
+        Retrieves newly created CRM objects from local DB, filtered by object_type if provided.
+        Returns a list of local records and the total count.
+        Pagination is offset-based: offset = (page-1)*limit
+        """
+        query = CreatedCRMObject.query
+        if object_type:
+            query = query.filter_by(object_type=object_type)
+
+        total = query.count()
+        offset = (page - 1) * limit
+        results = query.offset(offset).limit(limit).all()
+
+        # Convert each CreatedCRMObject to a dict
+        data = []
+        for obj in results:
+            data.append(
+                {
+                    "id": obj.id,
+                    "external_id": obj.external_id,
+                    "object_type": obj.object_type,
+                    "name": obj.name,
+                    "created_date": obj.created_date.isoformat(),
+                    "updated_date": obj.updated_date.isoformat(),
+                }
             )
-        except Exception as e:
-            raise Exception(
-                "Invalid cursor format. Expected 'created_at_iso:id'"
-            ) from e
 
-    # Fetch one extra record to determine if there's a next page.
-    rows = base_query.limit(limit + 1).all()
+        return data, total
 
-    if len(rows) > limit:
-        last_row = rows[-1]
-        # Construct the compound cursor
-        next_after = f"{last_row.created_at.isoformat()}:{last_row.id}"
-        rows = rows[:-1]
-    else:
-        next_after = None
+    # __OPTIONAL: STILL CALL HUBSPOT
+    def get_new_objects(
+        self, object_type: str, limit: int = 10, after: str = None
+    ) -> dict:
+        """
+        If you still want to fetch new objects from HubSpot directly,
+        you can use this. Not currently used by the controller,
+        but left for reference.
+        """
+        api = self._api_client()
+        return api.get_new_objects(object_type, limit=limit, after=after)
 
-    results = [
-        {
-            "id": r.id,
-            "object_id": r.object_id,
-            "object_type": r.object_type,
-            "created_at": r.created_at.isoformat(),
-        }
-        for r in rows
-    ]
+    def _store_created_crm_object(self, external_id: str, object_type: str, name: str):
+        """
+        Insert or update a record in CreatedCRMObject for the newly
+        created/updated CRM object. If it already exists by external_id,
+        update the name/updated_date.
+        """
+        existing = CreatedCRMObject.query.filter_by(
+            external_id=external_id, object_type=object_type
+        ).first()
+        if existing:
+            existing.name = name
+            existing.updated_date = datetime.datetime.utcnow()
+        else:
+            new_obj = CreatedCRMObject(
+                external_id=external_id,
+                object_type=object_type,
+                name=name,
+            )
+            db.session.add(new_obj)
 
-    return results, next_after
+        db.session.commit()

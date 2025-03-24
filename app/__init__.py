@@ -1,11 +1,20 @@
 import logging
-from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from .config import load_config
-from .logging_config import configure_logging
+from flask import Flask, jsonify
 from flask_swagger_ui import get_swaggerui_blueprint
-from .routes.crm import crm_blueprint
-from .extensions import db
+
+from .config import load_config
+from .routes import register_routes
+from .utils.errors import (
+    BaseError,
+    NotFoundError,
+    UnauthorizedError,
+    OperationForbiddenError,
+    BadRequestError,
+    ServiceUnavailableError,
+    UnprocessableEntityError,
+)
+from .utils.api_responses import error_response
+from .extensions import db, migrate
 
 
 def create_app(env_name=None):
@@ -16,21 +25,21 @@ def create_app(env_name=None):
     - Registers blueprints
     """
     app = Flask(__name__)
-
-    # Load config from environment
     config_obj = load_config(env_name)
     app.config.from_object(config_obj)
 
-    # Setup logging
-    log_level = app.config.get("LOG_LEVEL", "INFO")
-    configure_logging(log_level)
-
-    logging.info("Creating Flask app with environment: %s", env_name)
-
-    # Initialize DB
+    # Initialize DB + Migrations
     db.init_app(app)
+    migrate.init_app(app, db)
 
-    app.register_blueprint(crm_blueprint, url_prefix="/crm")
+    # Configure global logging
+    logging.basicConfig(
+        level=app.config["LOG_LEVEL"].upper(),
+        format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
+    )
+
+    # Register all routes
+    register_routes(app)
 
     SWAGGER_URL = "/api/docs"
     API_URL = "/static/openapi.yaml"
@@ -38,5 +47,33 @@ def create_app(env_name=None):
         SWAGGER_URL, API_URL, config={"app_name": "HubSpot CRM Integration API"}
     )
     app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
+
+    @app.errorhandler(BaseError)
+    def handle_base_error(error):
+        """
+        Catch any custom BaseError and return a standard error response.
+        """
+        app.logger.error(
+            f"BaseError: {error.message} (type={error.errorType}, http={error.httpCode})"
+        )
+        resp = error_response(
+            error=error.message,
+            message=error.verboseMessage or error.message,
+            status_code=error.httpCode,
+        )
+        return jsonify(resp), error.httpCode
+
+    @app.errorhandler(Exception)
+    def handle_unexpected_exception(error):
+        """
+        Catch any unexpected exceptions (e.g., unhandled).
+        """
+        app.logger.exception("Unhandled exception occurred.")
+        resp = error_response(
+            error="Internal Server Error",
+            message="An unexpected error occurred. Please try again later.",
+            status_code=500,
+        )
+        return jsonify(resp), 500
 
     return app

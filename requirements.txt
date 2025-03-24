@@ -55,3 +55,4 @@ identify==2.6.9
 nodeenv==1.9.1
 pre-commit==4.2.0
 virtualenv==20.29.3
+flask_migrate==4.1.0

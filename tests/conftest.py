@@ -5,6 +5,7 @@ from alembic import command
 from alembic.config import Config as AlembicConfig
 import time
 import os
+from app.services.oauth_service import HubspotOAuthService
 
 
 @pytest.fixture(scope="session")
