@@ -9,7 +9,6 @@ from ..integrations.hubspot_api import HubSpotAPI
 from typing import List, Dict
 
 
-
 class HubSpotService:
     """
     Encapsulates business logic for upserting contacts/deals,

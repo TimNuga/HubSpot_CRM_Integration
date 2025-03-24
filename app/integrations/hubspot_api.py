@@ -156,10 +156,13 @@ class HubSpotAPI:
             raise
 
     def associate_contact_and_deal(self, contact_id: str, deal_id: str):
-        url = f"{self.base_url}/crm/v3/objects/deals/{deal_id}/associations/contacts/{contact_id}"
+        url = f"{self.base_url}/crm/v3/associations/Deals/Contacts/batch/create"
+        body = {
+            "inputs": [{"from": {"id": str(deal_id)}, "to": {"id": str(contact_id)}}]
+        }
         try:
             resp = request_with_tenacity(
-                "PUT", url, headers=self._headers(), timeout=10
+                "POST", url, headers=self._headers(), json=body, timeout=10
             )
             resp.raise_for_status()
             return True
@@ -168,10 +171,13 @@ class HubSpotAPI:
             raise
 
     def associate_ticket_with_contact(self, ticket_id: str, contact_id: str):
-        url = f"{self.base_url}/crm/v3/objects/tickets/{ticket_id}/associations/contacts/{contact_id}"
+        url = f"{self.base_url}/crm/v3/associations/Tickets/Contacts/batch/create"
+        body = {
+            "inputs": [{"from": {"id": str(ticket_id)}, "to": {"id": str(contact_id)}}]
+        }
         try:
             resp = request_with_tenacity(
-                "PUT", url, headers=self._headers(), timeout=10
+                "POST", url, headers=self._headers(), json=body, timeout=10
             )
             resp.raise_for_status()
             return True
@@ -180,10 +186,13 @@ class HubSpotAPI:
             raise
 
     def associate_ticket_with_deal(self, ticket_id: str, deal_id: str):
-        url = f"{self.base_url}/crm/v3/objects/tickets/{ticket_id}/associations/deals/{deal_id}"
+        url = f"{self.base_url}/crm/v3/associations/Tickets/Deals/batch/create"
+        body = {
+            "inputs": [{"from": {"id": str(ticket_id)}, "to": {"id": str(deal_id)}}]
+        }
         try:
             resp = request_with_tenacity(
-                "PUT", url, headers=self._headers(), timeout=10
+                "POST", url, headers=self._headers(), json=body, timeout=10
             )
             resp.raise_for_status()
             return True
