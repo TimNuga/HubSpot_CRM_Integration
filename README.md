@@ -101,7 +101,9 @@ Database: A PostgreSQL DB is recommended. If using Docker Compose, the db contai
 5. Running the App
 
 Using Docker Compose
-```bash docker-compose up --build ```
+```bash 
+docker-compose up --build 
+```
 
 The Flask app will be available on port 5001 (configurable in docker-compose.yml).
 A DB container will also be started, if defined.
@@ -166,7 +168,9 @@ We include a Swagger/OpenAPI file under static/openapi.yaml. It describes all en
 Here is the recommended snippet inside openapi.yaml to reflect the actual routes (copy-paste as needed):
 ```
 
-```yaml openapi: 3.0.3 info: title: HubSpot CRM Integration API description: > This API integrates with HubSpot to create/update contacts, deals, tickets, and retrieve newly created CRM objects from the local DB. version: "1.0.0"```
+```yaml 
+openapi: 3.0.3 info: title: HubSpot CRM Integration API description: > This API integrates with HubSpot to create/update contacts, deals, tickets, and retrieve newly created CRM objects from the local DB. version: "1.0.0"
+```
 
 servers:
 
