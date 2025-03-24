@@ -1,259 +1,179 @@
 # HubSpot CRM Integration
 
-This repository contains a robust **Flask** application for **HubSpot CRM** integration, featuring:
-
-1. **Proactive Token Refresh** for HubSpot OAuth tokens.  
-2. **Rate Limiting** using Tenacity for 429 or transient server errors.  
-3. **Marshmallow Validations** for contacts, deals, and tickets.  
-4. **Structured Logging** in JSON format.  
-5. **Swagger/OpenAPI** documentation served via Docker.  
-6. **Docker & Docker Compose** setup for easy deployment.  
-7. **Robust Pagination** (cursor-based or offset-based) for retrieving large data sets.
-
----
+A production-ready **Flask** application that integrates with HubSpot’s CRM to create or update contacts, deals, and tickets, then store a local reference for subsequent retrieval. It also manages OAuth token refresh, rate-limiting logic, validation, and includes an **OpenAPI** specification for documentation.
 
 ## Table of Contents
 
-- [Project Overview](#project-overview)
-- [Features](#features)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Running Locally (Without Docker)](#running-locally-without-docker)
-- [Docker Setup](#docker-setup)
-- [API Documentation (Swagger/OpenAPI)](#api-documentation-swaggeropenapi)
-- [Endpoints](#endpoints)
-- [Pagination Approaches](#pagination-approaches)
-- [Structured Logging](#structured-logging)
-- [Testing](#testing)
-- [Contributing](#contributing)
-- [License](#license)
+1. Overview
+2. Folder Structure
+3. Installation
+4. Configuration
+5. Running the App
+6. Testing
+7. API Endpoints
+8. OpenAPI Specification
+9. Additional Notes
 
 ---
 
-## Project Overview
+## 1. Overview
 
-This application integrates with **HubSpot CRM** to:
+This project provides:
 
-- **Create or update** contacts, deals, and tickets.  
-- **Retrieve** newly created objects.  
-- Enforce best practices like **token refresh**, **rate-limit handling**, and **data validation**.
-
-It is designed to be **production-ready**, featuring:
-
-- **Proactive Token Refresh**: Minimizes downtime and race conditions around token expiry.  
-- **Exponential Backoff** for 429 or server errors.  
-- **Marshmallow** for structured validation.  
-- **OpenAPI** specs, served via **Swagger UI**.
+- **Contacts Upsert**: Create or update HubSpot contacts.
+- **Deals Upsert**: Create or update deals, optionally associated with a contact.
+- **Tickets Creation**: Always create new tickets, optionally associated with contact/deal.
+- **Local Storage**: Tracks newly created CRM objects in the database (`CreatedCRMObject`).
+- **Token Management**: Refreshes HubSpot OAuth tokens automatically, stored in `HubspotAuth`.
+- **Rate Limiting**: Retries on 429/5xx using Tenacity, raising custom errors if it persists.
+- **Validation**: Marshmallow schemas for contacts, deals, tickets.
+- **OpenAPI Docs**: Provided in `static/openapi.yaml`.
 
 ---
 
-## Features
+## 2. Folder Structure
 
-1. **Proactive Token Refresh**  
-   - Stores `expires_in` from HubSpot and refreshes ~60s before token expiry.  
-   - Avoids first-request failures when a token expires.
+```text
+app/
+  ├── __init__.py
+  ├── config.py
+  ├── extensions.py
+  ├── main.py
+  ├── models.py
+  ├── routes.py
+  ├── controllers/
+  │   └── hubspot_controller.py
+  ├── integrations/
+  │   └── hubspot_api.py
+  ├── schemas/
+  │   └── hubspot_schema.py
+  ├── services/
+  │   ├── hubspot_service.py
+  │   └── oauth_service.py
+  └── utils/
+      ├── __init__.py
+      ├── api_responses.py
+      ├── constants.py
+      ├── errors.py
+      └── rate_limit_handler.py
 
-2. **Rate Limiting with Tenacity**  
-   - Retries on 429 or 5xx responses (configurable).  
-   - Exponential backoff to reduce stress on HubSpot’s APIs.
+tests/
+  ├── conftest.py
+  ├── integration_tests/
+  └── unit_tests/
 
-3. **Marshmallow Validation**  
-   - ContactSchema, DealSchema, TicketSchema ensure mandatory fields and correct types.  
-   - 400 responses for invalid payloads.
+static/
+  └── openapi.yaml
 
-4. **Structured Logging**  
-   - Outputs logs in JSON format for easy aggregation and monitoring.  
-   - Additional fields can be injected (e.g., request_id) for advanced debugging.
+Dockerfile
+docker-compose.yml
+.env
 
-5. **OpenAPI/Swagger**  
-   - Full specification in `docs/openapi.yaml`.  
-   - Served at `/docs` for interactive API exploration.
+--- 
 
-6. **Dockerized**  
-   - `docker-compose.yml` to run the app, a Postgres DB, and the test container with a single command.
+## 3. Installation
 
-7. **Pagination**  
-   - Supports either **HubSpot’s cursor-based** approach or **local offset/cursor-based** queries.  
-   - Ensures large data sets can be handled efficiently.
-
----
-
-## Installation
-
-1. **Clone** this repository:
-   ```bash
-   git clone https://github.com/yourorg/hubspot-crm-integration.git
-   cd hubspot-crm-integration
-
-2. **Set up** a Python virtual environment (optional but recommended):
 ```bash
-python3 -m venv venv
-source venv/bin/activate
+1) Clone the repository:
+
+git clone https://github.com/yourusername/hubspot-crm-integration.git cd hubspot-crm-integration
+
+2) (Optional) Create a virtual environment
+
+python3 -m venv venv source venv/bin/activate # or venv\Scripts\activate for Windows
+
+3) Install dependencies
+
+pip install -r requirements.txt 
+
+
+4. Configuration
+
+Environment Variables: Copy .env.example to .env and fill in:
+FLASK_ENV (development, testing, or production)
+SECRET_KEY
+DATABASE_URL (e.g. postgresql://user:password@localhost:5432/dbname)
+HubSpot: HUBSPOT_CLIENT_ID, HUBSPOT_CLIENT_SECRET, HUBSPOT_REFRESH_TOKEN, HUBSPOT_OAUTH_TOKEN_URL, HUBSPOT_API_BASE_URL
+Logging / Rate Limit: e.g. LOG_LEVEL=INFO
+Database: A PostgreSQL DB is recommended. If using Docker Compose, the db container is automatically set up.
 ```
 
-3. **Install dependencies**:
+5. Running the App
+
+Using Docker Compose
+```bash docker-compose up --build ```
+
+The Flask app will be available on port 5001 (configurable in docker-compose.yml).
+A DB container will also be started, if defined.
+Running Locally Without Docker
 ```bash
-pip install --upgrade pip
-pip install -r requirements.txt
-```
 
-## Configuration
-- .env file(in the project root or in your environment variables):
-    Copy the .env.example file and provide your own credentials as required.
+1) Ensure DATABASE_URL is set or in .env
 
-- The application reads these vars in config.py to set up OAuth, DB connections, logging levels, etc.
+export DATABASE_URL="postgresql://user:pass@localhost:5432/hubspot"
 
-## Running Locally (Without Docker)
+2) Run migrations (if using Flask-Migrate)
+
+flask db upgrade
+
+3) Start the app
+
+flask run --host=0.0.0.0 --port=5001 ```
+
+6. Testing
+
 ```bash
-export FLASK_ENV=development
-flask run
-# or
-python -m app.main
-```
-Your app is available at http://localhost:5001.
-- Swagger UI: Documentation available at `/docs/openapi.yaml`
 
-## Docker Setup
-1. Build & Launch:
+Run all tests:
+
+pytest tests/ --maxfail=1 --disable-warnings
+
+Run only unit or integration tests:
+
+pytest tests/unit_tests pytest tests/integration_tests ```
+
+Unit Tests: Isolate services, schemas, or rate-limiting logic.
+Integration Tests: Use the Flask test client (test_client) to exercise endpoints.
+```
+
+7. API Endpoints
+
+All routes mount at /api via register_routes. The major endpoints are:
+
 ```bash
-docker compose up --build
+POST /api/contacts: Create/update (upsert) a contact.
+PUT /api/contacts: Same upsert logic, but via PUT method.
+POST /api/deals: Create/update a deal.
+PUT /api/deals: Update or create a deal if not found.
+POST /api/tickets: Always create a new ticket.
+GET /api/new-crm-objects: Retrieve newly created local CRM objects (contacts, deals, tickets) with pagination.
+Each endpoint uses Marshmallow validation and references logic in HubSpotService.
+
+8. OpenAPI Specification
+
+We include a Swagger/OpenAPI file under static/openapi.yaml. It describes all endpoints with the /api prefix:
+
+/api/contacts (POST/PUT)
+/api/deals (POST/PUT)
+/api/tickets (POST)
+/api/new-crm-objects (GET)
+Here is the recommended snippet inside openapi.yaml to reflect the actual routes (copy-paste as needed):
 ```
-2. Services:
-- db: PostgreSQL database.
-- test: Runs migrations & tests, then exits.
-- web: The Flask app with Gunicorn.
 
-When it starts, the test container will run your tests. If all pass, the web container will proceed to serve on http://localhost:5001.
+```yaml openapi: 3.0.3 info: title: HubSpot CRM Integration API description: > This API integrates with HubSpot to create/update contacts, deals, tickets, and retrieve newly created CRM objects from the local DB. version: "1.0.0"```
 
-## API Documentation (Swagger/OpenAPI)
-A dedicated file docs/openapi.yaml provides the full specification. By default, it’s served at:
+servers:
+
 ```bash
-GET /api/docs/
+url: /api description: "Base path for CRM routes."
+paths: /contacts: ... /deals: ... /tickets: ... /new-crm-objects: ... components: schemas: ... ```
 ```
 
-An interactive UI is available there, letting you try endpoints.
+You can then serve /api/docs using Flask’s static file support or integrate a Swagger UI blueprint.
 
-## Endpoints
+9. Additional Notes
 
-1. POST /crm/register
-    - Purpose: Create or update a contact, plus deals and tickets.
-    - Body (JSON):
-    ```json
-    {
-    "contact": {
-        "email": "[email protected]",
-        "firstname": "John",
-        "lastname": "Doe",
-        "phone": "123-456-7890"
-    },
-    "deals": [
-        {
-        "dealname": "New Deal",
-        "amount": 1200,
-        "dealstage": "appointmentscheduled"
-        }
-    ],
-    "tickets": [
-        {
-        "subject": "Billing Issue",
-        "description": "Customer cannot pay",
-        "category": "billing",
-        "hs_pipeline": "support",
-        "hs_ticket_priority": "HIGH",
-        "hs_pipeline_stage": "1"
-        }
-    ]
-    }   
-    ```
-    - Response:
-    ```json
-    {
-        "success": true,
-        "message": "Contact, Deal(s), and Ticket(s) processed successfully.",
-        "contact_id": "12345",
-        "deal_ids": ["67890"],
-        "ticket_ids": ["98765"]
-    }
-    ```
-
-2. GET /crm/objects
-    - Purpose: Retrieve newly created CRM objects from HubSpot.
-    - Query Params: limit, after (cursor-based for HubSpot).
-    - Response:
-    ```json
-    {
-    "contacts": [...],
-    "next_after": "..."
-    }
-    ```
-
-3. GET /objects/local
-    - Purpose: Retrieve locally stored references with offset-based pagination.
-    - Query Params: page, limit.
-    - Response:
-```json
-{
-    "page": 1,
-    "limit": 20,
-    "total_pages": 5,
-    "total_records": 100,
-    "results": [...]
-}
-```
-
-## Pagination Approaches
-This application supports:
-- HubSpot Cursor-Based:
-    - Use after param from response.
-    - Typically: GET /crm/v3/objects/... ?limit=20&after=<cursor>.
-- Local Offset-Based:
-    - For DB queries: page + limit.
-- Local Cursor/Keyset:
-    - If you have massive data sets.
-    - GET /objects/local-cursor?limit=20&after=<id>.
-
-## Structured Logging
-All logs are output in JSON with fields like asctime, name, levelname, message. Example snippet from the logs:
-```json
-{
-  "asctime": "2025-03-20 13:54:31,045",
-  "name": "app.routes.crm",
-  "levelname": "INFO",
-  "message": "Handling /crm/register request"
-}
-```
-Logs go to stdout so Docker or your environment can collect them.
-
-## Testing
-- Pytest is used for both unit and integration tests.
-- Marshmallow validations are tested to ensure 400 errors on invalid input.
-- Rate-limit logic tested with a 429 mock, verifying Tenacity’s retries.
-- Run Tests Locally:
-```bash
-FLASK_ENV=testing pytest --maxfail=1 --disable-warnings -q
-```
-- Run Tests in Docker:
-```bash
-docker compose up --build
-```
-
-## Contributing
-1. Fork the repo and create feature branches.
-2. Open Pull Requests with details on your changes.
-3. Please maintain consistent code style and update relevant docs or tests.
-
-## License
-
-MIT License
-
-Enjoy your fully featured, production-grade HubSpot CRM Integration with:
-
-- Proactive token refresh
-- Tenacity-based rate limiting
-- Marshmallow validations
-- Structured logging
-- Docker
-- Swagger docs
-- Pagination
-
-Feel free to create issues or pull requests to enhance this project further!
+Token Management: HubspotOAuthService handles refresh tokens, stored in HubspotAuth.
+Rate Limiting: request_with_tenacity in rate_limit_handler.py retries on 429 or 5xx, final attempt raising a custom error if it persists.
+Local DB: The CreatedCRMObject table tracks newly created objects for retrieval via GET /api/new-crm-objects.
+Contributing: Pull requests and issues are welcome to expand features or address bugs.
