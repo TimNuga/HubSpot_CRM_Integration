@@ -141,3 +141,69 @@ class TestHubSpotService:
         mock_api.associate_ticket_with_deal.assert_called_once_with(
             "TICKET_ABC", "DEAL_456"
         )
+
+    @patch("app.services.hubspot_service.HubSpotService.upsert_deal")
+    def test_upsert_deals_calls_upsert_deal(self, mock_upsert_deal, db_session):
+        """
+        Ensures upsert_deals() calls upsert_deal() for each deal in the list
+        and returns the aggregated results.
+        """
+        service = HubSpotService()
+        deals_data = [
+            {
+                "dealname": "Bulk Deal 1",
+                "amount": 50,
+                "dealstage": "appointmentscheduled",
+            },
+            {"dealname": "Bulk Deal 2", "amount": 150, "dealstage": "qualifiedtobuy"},
+        ]
+        # Mock each single upsert_deal call to return a distinct "result"
+        mock_upsert_deal.side_effect = [
+            {"id": "DEAL_111", "properties": {"dealname": "Bulk Deal 1"}},
+            {"id": "DEAL_222", "properties": {"dealname": "Bulk Deal 2"}},
+        ]
+
+        results = service.upsert_deals(deals_data)
+
+        assert len(results) == 2
+        assert results[0]["id"] == "DEAL_111"
+        assert results[1]["id"] == "DEAL_222"
+        # Verify that upsert_deal was called twice
+        assert mock_upsert_deal.call_count == 2
+
+    @patch("app.services.hubspot_service.HubSpotService.create_ticket")
+    def test_create_tickets_calls_create_ticket(self, mock_create_ticket):
+        """
+        Ensures create_tickets() calls create_ticket() for each ticket in the list
+        and returns the aggregated results.
+        """
+        service = HubSpotService()
+        tickets_data = [
+            {
+                "subject": "Bulk Tix A",
+                "description": "Test A",
+                "category": "technical_issue",
+                "pipeline": "support",
+                "hs_ticket_priority": "HIGH",
+                "hs_pipeline_stage": "1",
+            },
+            {
+                "subject": "Bulk Tix B",
+                "description": "Test B",
+                "category": "billing",
+                "pipeline": "support",
+                "hs_ticket_priority": "LOW",
+                "hs_pipeline_stage": "2",
+            },
+        ]
+        mock_create_ticket.side_effect = [
+            {"id": "TICKET_111", "properties": {"subject": "Bulk Tix A"}},
+            {"id": "TICKET_222", "properties": {"subject": "Bulk Tix B"}},
+        ]
+
+        results = service.create_tickets(tickets_data)
+
+        assert len(results) == 2
+        assert results[0]["id"] == "TICKET_111"
+        assert results[1]["id"] == "TICKET_222"
+        assert mock_create_ticket.call_count == 2

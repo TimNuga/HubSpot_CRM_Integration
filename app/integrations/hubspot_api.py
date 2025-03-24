@@ -156,7 +156,7 @@ class HubSpotAPI:
             raise
 
     def associate_contact_and_deal(self, contact_id: str, deal_id: str):
-        url = f"{self.base_url}/crm/v3/objects/deals/{deal_id}/associations/contacts/{contact_id}/deal_to_contact"
+        url = f"{self.base_url}/crm/v3/objects/deals/{deal_id}/associations/contacts/{contact_id}"
         try:
             resp = request_with_tenacity(
                 "PUT", url, headers=self._headers(), timeout=10
@@ -168,7 +168,7 @@ class HubSpotAPI:
             raise
 
     def associate_ticket_with_contact(self, ticket_id: str, contact_id: str):
-        url = f"{self.base_url}/crm/v3/objects/tickets/{ticket_id}/associations/contacts/{contact_id}/ticket_to_contact"
+        url = f"{self.base_url}/crm/v3/objects/tickets/{ticket_id}/associations/contacts/{contact_id}"
         try:
             resp = request_with_tenacity(
                 "PUT", url, headers=self._headers(), timeout=10
@@ -180,7 +180,7 @@ class HubSpotAPI:
             raise
 
     def associate_ticket_with_deal(self, ticket_id: str, deal_id: str):
-        url = f"{self.base_url}/crm/v3/objects/tickets/{ticket_id}/associations/deals/{deal_id}/ticket_to_deal"
+        url = f"{self.base_url}/crm/v3/objects/tickets/{ticket_id}/associations/deals/{deal_id}"
         try:
             resp = request_with_tenacity(
                 "PUT", url, headers=self._headers(), timeout=10

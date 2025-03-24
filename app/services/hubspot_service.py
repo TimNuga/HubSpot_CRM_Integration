@@ -6,6 +6,8 @@ from app.models import CreatedCRMObject, db
 from app.utils.errors import BaseError
 from .oauth_service import HubspotOAuthService
 from ..integrations.hubspot_api import HubSpotAPI
+from typing import List, Dict
+
 
 
 class HubSpotService:
@@ -110,6 +112,28 @@ class HubSpotService:
             name=created["properties"].get("subject", ""),
         )
         return created
+
+    def upsert_deals(self, deals_data: List[Dict[str, any]]) -> List[Dict[str, any]]:
+        """
+        Accepts a list of deals, upserts each one, returns a list of results.
+        """
+        results = []
+        for deal_data in deals_data:
+            single_result = self.upsert_deal(deal_data)
+            results.append(single_result)
+        return results
+
+    def create_tickets(
+        self, tickets_data: List[Dict[str, any]]
+    ) -> List[Dict[str, any]]:
+        """
+        Accepts a list of tickets, creates each one, returns a list of results.
+        """
+        results = []
+        for ticket_data in tickets_data:
+            single_ticket = self.create_ticket(ticket_data)
+            results.append(single_ticket)
+        return results
 
     def get_new_objects_from_db(self, object_type: str, page: int = 1, limit: int = 10):
         """

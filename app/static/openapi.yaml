@@ -104,6 +104,55 @@ paths:
           description: "Validation error (missing or invalid fields)."
         '500':
           description: "Server error, or unexpected exception."
+  
+    /deals/bulk:
+      post:
+        summary: Create multiple deals at once
+        description: >
+          Creates or updates multiple deals in a single request.  
+          Accepts a JSON body containing `"deals"` (an array of deal objects).
+        operationId: bulkCreateDeals
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkDealsRequest'
+        responses:
+          '200':
+            description: "Bulk upserted deals successfully."
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/BulkDealsResponse'
+          '400':
+            description: "Validation error."
+          '500':
+            description: "Server error."
+
+      put:
+        summary: Update multiple deals at once
+        description: >
+          Also allows upserting multiple deals in one call,  
+          reusing the same payload structure as POST.
+        operationId: bulkUpdateDeals
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkDealsRequest'
+        responses:
+          '200':
+            description: "Bulk upserted deals successfully."
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/BulkDealsResponse'
+          '400':
+            description: "Validation error."
+          '500':
+            description: "Server error."
 
   /tickets:
     post:
@@ -129,6 +178,31 @@ paths:
           description: "Validation error (missing or invalid fields)."
         '500':
           description: "Server error, or unexpected exception."
+
+  /tickets/bulk:
+    post:
+      summary: Create multiple tickets at once
+      description: >
+        Creates multiple tickets in a single request.  
+        Accepts a JSON body containing `"tickets"` (an array of ticket objects).
+      operationId: bulkCreateTickets
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkTicketsRequest'
+      responses:
+        '201':
+          description: "Bulk created tickets successfully."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkTicketsResponse'
+        '400':
+          description: "Validation error."
+        '500':
+          description: "Server error."
 
   /new-crm-objects:
     get:
@@ -241,6 +315,68 @@ components:
         - pipeline
         - hs_ticket_priority
         - hs_pipeline_stage
+
+    BulkDealsRequest:
+      type: object
+      properties:
+        deals:
+          type: array
+          items:
+            $ref: '#/components/schemas/Deal'
+      required:
+        - deals
+
+    BulkDealsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Bulk upserted deals"
+        data:
+          type: object
+          properties:
+            deals:
+              type: array
+              items:
+                type: object
+                description: "Resulting deal object from HubSpot"
+      required:
+        - success
+        - data
+
+    BulkTicketsRequest:
+      type: object
+      properties:
+        tickets:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ticket'
+      required:
+        - tickets
+
+    BulkTicketsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Bulk created tickets"
+        data:
+          type: object
+          properties:
+            tickets:
+              type: array
+              items:
+                type: object
+                description: "Resulting ticket object from HubSpot"
+      required:
+        - success
+        - data
 
     UpsertContactResponse:
       type: object
