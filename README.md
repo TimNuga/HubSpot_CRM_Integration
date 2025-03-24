@@ -106,35 +106,40 @@ Using Docker Compose
 The Flask app will be available on port 5001 (configurable in docker-compose.yml).
 A DB container will also be started, if defined.
 Running Locally Without Docker
+    1) Ensure DATABASE_URL is set or in .env
 ```bash
-
-1) Ensure DATABASE_URL is set or in .env
-
 export DATABASE_URL="postgresql://user:pass@localhost:5432/hubspot"
+```
 
-2) Run migrations (if using Flask-Migrate)
+    2) Run migrations (if using Flask-Migrate)
 
+```bash
 flask db upgrade
+```
 
-3) Start the app
+    3) Start the app
 
-flask run --host=0.0.0.0 --port=5001 ```
+```bash
+flask run --host=0.0.0.0 --port=5001 
+```
 
 6. Testing
 
-```bash
+
 
 Run all tests:
-
+```bash
 pytest tests/ --maxfail=1 --disable-warnings
+```
 
 Run only unit or integration tests:
 
+```bash
 pytest tests/unit_tests pytest tests/integration_tests ```
+```
 
 Unit Tests: Isolate services, schemas, or rate-limiting logic.
 Integration Tests: Use the Flask test client (test_client) to exercise endpoints.
-```
 
 7. API Endpoints
 
@@ -148,11 +153,12 @@ PUT /api/deals: Update or create a deal if not found.
 POST /api/tickets: Always create a new ticket.
 GET /api/new-crm-objects: Retrieve newly created local CRM objects (contacts, deals, tickets) with pagination.
 Each endpoint uses Marshmallow validation and references logic in HubSpotService.
+```
 
 8. OpenAPI Specification
 
 We include a Swagger/OpenAPI file under static/openapi.yaml. It describes all endpoints with the /api prefix:
-
+```bash
 /api/contacts (POST/PUT)
 /api/deals (POST/PUT)
 /api/tickets (POST)
